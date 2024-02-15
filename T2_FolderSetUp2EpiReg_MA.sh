@@ -207,11 +207,22 @@ for ((i=3;i<=34;i++)); #subj ID
 					--echospacing=0.0000164 --pedir=x #> epi_reg_log_VP00"$i"_sess0"$j".txt
 
 #------ APPLY distort correction 		
+	 		sbj_path=/home/malberti/Unix_Folders/MORV_processing/VP00"$i"	 # CP all usefull files in same folder (idk why i did it, it is totally useless)	
+   			m_qt2="$sbj_path"/VP00"$i"_results_qt2_mte
+	 		cp "$sess_path"/multite_interp/m_qt2_tc.nii "$m_qt2"/VP00"$i"_sess0"$j"_m_qt2_tc.nii 
+	 		cp "$sess_path"/distortcor/epi2std_warp.nii.gz "$m_qt2"/VP00"$i"_sess0"$j"_epi2std_warp.nii.gz
+	 		cp "$sess_path"/anat/mprage/t1w_acpc.nii.gz "$m_qt2"/VP00"$i"_sess0"$j"_t1w_acpc.nii.gz
+			cp "$sess_path"/anat/mprage/t1w_acpc_brain.nii.gz" $m_qt2"/VP00"$i"_sess0"$j"_t1w_acpc_brain.nii.gz	
+	 		cp "$sess_path"/anat/mprage/t1w_acpc_brain_mask.nii.gz " "$m_qt2"/VP00"$i"_sess0"$j"_t1w_acpc_brain_mask.nii.gz			
+			cp "$sess_path"/motioncorr_multite/moco_qt2.nii.gz "$m_qt2"/VP00"$i"_sess0"$j"_moco_qt2.nii.gz 
 
+			fsl_mni=/usr/local/fsl/data/standard/MNI152_T1_2mm_brain.nii.gz
+			fsl_mni_mask=/usr/local/fsl/data/standard/MNI152_T1_2mm_brain_mask.nii.gz
+			
 			applywarp --ref=/usr/local/fsl/data/standard/MNI152_T1_2mm_brain.nii.gz \
 					--in="$m_qt2"/VP00"$i"_sess0"$j"_m_qt2_tc.nii \
 					--out="$m_qt2"/VP00"$i"_sess0"$j"_m_qt2_tc_2mni.nii.gz \
-					--warp="$t1_2mni_warp"/acpc_dc2standard.nii.gz  \  		#	Resample into standard space
+					--warp="$t1_2mni_warp"/acpc_dc2standard.nii.gz  \  		#Resample into standard space
 					--premat="$mat_epi2std" # Apply distort correction 
 		
 			echo "subj VP00"$i" sess0"$j" done"
@@ -219,9 +230,26 @@ for ((i=3;i<=34;i++)); #subj ID
 
 #------ Other correction:  ( i didn't apply it/them to multite T2*)
 			mkdir "$m_qt2"/biascorr 
+   			mkdir "$m_qt2"/jacobian
 			N4BiasFieldCorrection -d 3 -i "$m_qt2"/VP00"$i"_sess0"$j"_m_qt2_tc_2mni.nii.gz -o "$m_qt2"/biascorr/VP00"$i"_sess0"$j"_m_qt2_tc_2mni_unbiased.nii.gz -v
-	done
+	
+ 			jacobian2t1="$m_qt2"/jacobian/jacobian2t1.nii.gz
+			jacobian2t1_final=""$m_qt2"/jacobian/jacobian2t1.nii.gz
+			jacobian="$m_qt2"/jacobian/jacobian.nii.gz
+ 
+ 		# create spline interpolated output for scout to T1w + apply bias field correction --> check if u need it, maybe u can apply bias correction by using N4biascorrection or Jacobian??
+			applywarp --rel --interp=spline -i "$sbref_wd", -r "$t1" -w "$sbref_undist_warp" -o "$sbref_undist_1vol"
+                
+
+		# Calculate real jacobian, of just fieldmap warp from epi_reg NOTE: convertwarp requires an output argument regardless
+			convertwarp --rel -w "$sbref_undist2t1_init_warp", -r "$sbref_undist2t1_init_warp" --jacobian="$jacobian2t1" -o "$disco_wd"/junk_warp/
+             
+		#but, convertwarp's --jacobian output has 8 volumes, as it outputs all combinations of one-sided differences so, average them together
+			fslmaths "$jacobian2t1" -Tmean "$jacobian2t1" 
+			imcp "$jacobian2t1" "$jacobian" 
+ 	done
 done 
+
 
 # ----- RUN MATLAB fitting_t2.m ------- Multite interp	
 		
